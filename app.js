@@ -1,15 +1,13 @@
 const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "nmcQuizProgress_v2";
+const STORAGE_KEY = "nmcQuizProgress_v3";
 
-// Collect questions from multiple files
+// Gather all questions
 const BANK = Array.isArray(window.QUESTION_BANK) ? window.QUESTION_BANK : [];
-// Each questions_*.js file should push into window.QUESTION_BANK.
-// If you used my files below, this is already handled.
 
 const defaultProgress = () => ({
   overall: { answered: 0, correct: 0, streak: 0, lastDay: null },
-  topics: {} // topic -> { answered, correct, wrongIds: {id:count}, seenIds: {id:count} }
+  topics: {} // topic -> { answered, correct, wrongIds, seenIds }
 });
 
 function loadProgress(){
@@ -30,8 +28,8 @@ function todayKey(){
 }
 
 function qId(q){
-  // stable id includes subtopic + pack + question text
-  return `${q.topic}||${q.subtopic || ""}||${q.pack || ""}||${q.q}`;
+  // stable id includes key fields
+  return `${q.pack||""}||${q.topic||""}||${q.subtopic||""}||${q.q||""}`;
 }
 
 function shuffle(arr){
@@ -75,6 +73,7 @@ function topicStats(topic){
   const acc = t.answered ? Math.round((t.correct/t.answered)*100) : 0;
   return { ...t, accuracy: acc };
 }
+
 function overallStats(){
   const o = progress.overall;
   const acc = o.answered ? Math.round((o.correct/o.answered)*100) : 0;
@@ -82,15 +81,38 @@ function overallStats(){
 }
 
 function uniqueTopics(qs){
-  return [...new Set(qs.map(q => q.topic))].sort();
+  return [...new Set(qs.map(q => q.topic).filter(Boolean))].sort();
 }
 function uniqueSubtopics(qs){
   return [...new Set(qs.map(q => q.subtopic).filter(Boolean))].sort();
 }
 function uniquePacks(qs){
   const base = [...new Set(qs.map(q => q.pack).filter(Boolean))].sort();
-  // Always include "All"
-  return ["All packs", ...base];
+  // Add curated virtual packs
+  return [
+    "Year 2 (default)",
+    "Mixed Revision (Y2)",
+    "Safety Only",
+    "All packs",
+    ...base.filter(p => !["Year 2","Safety: Deterioration","Safety: Medicines","Safety: Infection"].includes(p))
+  ];
+}
+
+function packFilter(qs, pack){
+  if(!pack || pack === "All packs") return qs;
+
+  if(pack === "Year 2 (default)") {
+    return qs.filter(q => q.pack === "Year 2" || (q.pack || "").startsWith("Safety:"));
+  }
+  if(pack === "Mixed Revision (Y2)") {
+    // Year 2 + safety + some Year 1 foundations
+    return qs.filter(q => q.pack === "Year 2" || q.pack === "Year 1" || (q.pack || "").startsWith("Safety:"));
+  }
+  if(pack === "Safety Only") {
+    return qs.filter(q => (q.pack || "").startsWith("Safety:"));
+  }
+  // direct match fallback
+  return qs.filter(q => q.pack === pack);
 }
 
 function applyFilters(){
@@ -98,11 +120,8 @@ function applyFilters(){
   const sub = $("subtopicSelect").value;
   const query = $("searchInput").value.trim().toLowerCase();
 
-  let qs = BANK;
+  let qs = packFilter(BANK, pack);
 
-  if(pack && pack !== "All packs"){
-    qs = qs.filter(q => q.pack === pack);
-  }
   if(sub){
     qs = qs.filter(q => q.subtopic === sub);
   }
@@ -127,35 +146,30 @@ function updateHeaderStats(){
 function renderPackSelect(){
   const packs = uniquePacks(BANK);
   $("packSelect").innerHTML = packs.map(p => `<option value="${p}">${p}</option>`).join("");
+  // Default to Year 2 pack if not already set
+  if(!$("packSelect").value) $("packSelect").value = "Year 2 (default)";
 }
+
 function renderSubtopicSelect(){
-  const filteredForPack = (() => {
-    const pack = $("packSelect").value;
-    if(!pack || pack === "All packs") return BANK;
-    return BANK.filter(q => q.pack === pack);
-  })();
-
+  const pack = $("packSelect").value;
+  const filteredForPack = packFilter(BANK, pack);
   const subs = uniqueSubtopics(filteredForPack);
-  const current = $("subtopicSelect").value;
 
+  const current = $("subtopicSelect").value;
   $("subtopicSelect").innerHTML =
     `<option value="">All subtopics</option>` +
     subs.map(s => `<option value="${s}">${s}</option>`).join("");
 
-  // Keep selection if still exists
   if(current && subs.includes(current)) $("subtopicSelect").value = current;
 }
 
 function buildTopicCard(topic, qsInTopic){
   const st = topicStats(topic);
   const totalQs = qsInTopic.length;
-  const weakness = st.answered ? (100 - st.accuracy) : 100;
 
   const accPillClass = st.answered
     ? (st.accuracy >= 75 ? "good" : st.accuracy >= 50 ? "" : "bad")
     : "soft";
-
-  const commonSub = mostCommonSubtopic(qsInTopic);
 
   const div = document.createElement("div");
   div.className = "card topic";
@@ -163,7 +177,7 @@ function buildTopicCard(topic, qsInTopic){
     <div class="head">
       <div>
         <div class="name">${topic}</div>
-        <div class="mini">${totalQs} questions • Common focus: ${commonSub || "Mixed"}</div>
+        <div class="mini">${totalQs} questions • Y2 focus</div>
       </div>
       <div class="badges">
         <span class="pill ${accPillClass}">${st.answered ? `${st.accuracy}%` : "New"}</span>
@@ -174,20 +188,6 @@ function buildTopicCard(topic, qsInTopic){
   `;
   div.querySelector("button").addEventListener("click", () => start(topic));
   return div;
-}
-
-function mostCommonSubtopic(qs){
-  const map = new Map();
-  qs.forEach(q => {
-    const k = q.subtopic || "";
-    map.set(k, (map.get(k) || 0) + 1);
-  });
-  let best = "";
-  let bestN = 0;
-  for(const [k,v] of map.entries()){
-    if(v > bestN && k) { best = k; bestN = v; }
-  }
-  return best;
 }
 
 function renderTopics(){
@@ -201,7 +201,6 @@ function renderTopics(){
   topics.sort((a,b)=>{
     const sa = topicStats(a);
     const sb = topicStats(b);
-
     if(sort === "name") return a.localeCompare(b);
     if(sort === "weakest"){
       const wa = sa.answered ? sa.correct/sa.answered : 0;
@@ -231,7 +230,7 @@ let state = {
   score:0,
   answered:false,
   activeQ:null,
-  pack:"All packs",
+  pack:"Year 2 (default)"
 };
 
 function showHome(){
@@ -241,7 +240,6 @@ function showHome(){
   renderSubtopicSelect();
   renderTopics();
 }
-
 function showQuiz(){
   $("homeSection").classList.add("hidden");
   $("quizSection").classList.remove("hidden");
@@ -257,9 +255,7 @@ function updateQuizUI(){
   $("packPill").textContent = `Pack: ${state.pack}`;
 }
 
-function setStatus(text){
-  $("statusPill").textContent = text;
-}
+function setStatus(text){ $("statusPill").textContent = text; }
 
 function markSeen(q){
   const id = qId(q);
@@ -290,8 +286,7 @@ function recordResult(q, correct){
     const lastDate = last ? new Date(last + "T00:00:00") : null;
     const now = new Date(day + "T00:00:00");
     const diffDays = lastDate ? Math.round((now - lastDate)/(1000*60*60*24)) : 999;
-    if(diffDays === 1) progress.overall.streak += 1;
-    else progress.overall.streak = 1;
+    progress.overall.streak = (diffDays === 1) ? (progress.overall.streak + 1) : 1;
     progress.overall.lastDay = day;
   }
 
@@ -323,9 +318,7 @@ function renderQuestion(){
   `;
 
   document.querySelectorAll(".choice").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      choose(parseInt(btn.dataset.i,10));
-    });
+    btn.addEventListener("click", ()=> choose(parseInt(btn.dataset.i,10)));
   });
 
   updateQuizUI();
@@ -372,7 +365,6 @@ function reveal(){
   });
 
   markSeen(q);
-  // Reveals train weak areas as “wrong”
   recordResult(q, false);
 
   $("explain").textContent = q.explanation || "";
@@ -418,9 +410,7 @@ function buildDeckForMode(topic){
   const pack = $("packSelect").value;
   const sub = $("subtopicSelect").value;
 
-  let all = BANK.filter(q => q.topic === topic);
-
-  if(pack && pack !== "All packs") all = all.filter(q => q.pack === pack);
+  let all = packFilter(BANK.filter(q => q.topic === topic), pack);
   if(sub) all = all.filter(q => q.subtopic === sub);
 
   const t = ensureTopicRecord(topic);
@@ -438,23 +428,20 @@ function buildDeckForMode(topic){
     return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
   }
 
-  if(mode === "spaced"){
-    const weights = all.map(q => {
-      const wrong = (wrongMap[qId(q)] ?? 0);
-      const seen = (seenMap[qId(q)] ?? 0);
-      return 1 + wrong * 4 + Math.max(0, 3 - seen);
-    });
-    const picked = weightedPick(all, weights, limit >= 999 ? all.length : limit);
-    return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
-  }
-
-  return shuffle(all);
+  // spaced
+  const weights = all.map(q => {
+    const wrong = (wrongMap[qId(q)] ?? 0);
+    const seen = (seenMap[qId(q)] ?? 0);
+    return 1 + wrong * 4 + Math.max(0, 3 - seen);
+  });
+  const picked = weightedPick(all, weights, limit >= 999 ? all.length : limit);
+  return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
 }
 
 function start(topic){
   state.mode = $("modeSelect").value;
   state.topic = topic;
-  state.pack = $("packSelect").value || "All packs";
+  state.pack = $("packSelect").value || "Year 2 (default)";
   state.deck = buildDeckForMode(topic);
   state.idx = 0;
   state.score = 0;
@@ -471,17 +458,15 @@ function resetProgress(){
 }
 
 function init(){
-  // Pack select
   renderPackSelect();
+  // Force default pack to Y2 for you
+  $("packSelect").value = "Year 2 (default)";
+
   renderSubtopicSelect();
   updateHeaderStats();
   renderTopics();
 
-  $("packSelect").addEventListener("change", ()=>{
-    renderSubtopicSelect();
-    renderTopics();
-  });
-
+  $("packSelect").addEventListener("change", ()=>{ renderSubtopicSelect(); renderTopics(); });
   $("subtopicSelect").addEventListener("change", renderTopics);
   $("searchInput").addEventListener("input", renderTopics);
   $("sortSelect").addEventListener("change", renderTopics);
