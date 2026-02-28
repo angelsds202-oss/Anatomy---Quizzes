@@ -1,1 +1,13 @@
+window.QUESTION_BANK = window.QUESTION_BANK || [];
 
+window.QUESTION_BANK.push(
+  // LTC (HF/HTN/AF/anticoags)
+  { pack:"Year 2", track:"LTC", topic:"Cardiovascular", subtopic:"Heart failure management", q:"A stable HF patient reports increasing ankle swelling and weight gain over a week. Best nursing action?", choices:["Ignore—common in HF","Assess fluid status, check weight trend, escalate for review/meds adjustment","Advise strenuous exercise immediately","Stop all fluids"], answerIndex:1, explanation:"Trend weight/oedema suggests fluid overload—assess, consider diuretic review, safety-net and escalate appropriately." },
+  { pack:"Year 2", track:"LTC", topic:"Cardiovascular", subtopic:"Hypertension", q:"Which lifestyle advice is most evidence-aligned for long-term BP control?", choices:["High salt diet","Regular activity + lower salt + healthy weight","Avoid all carbs","Only drink energy drinks"], answerIndex:1, explanation:"Lifestyle fundamentals: salt reduction, activity, weight management, alcohol moderation, smoking cessation." },
+  { pack:"Year 2", track:"LTC", topic:"Cardiovascular", subtopic:"Atrial fibrillation", q:"A patient with AF asks why anticoagulants matter. Best explanation?", choices:["They lower heart rate","They prevent stroke risk from clots","They cure AF","They treat chest infections"], answerIndex:1, explanation:"AF increases stroke risk due to thrombus formation; anticoagulation reduces this risk." },
+  { pack:"Year 2", track:"LTC", topic:"Cardiovascular", subtopic:"Anticoagulation safety", q:"A warfarin patient has an INR above therapeutic range. Priority?", choices:["Give extra warfarin","Hold/adjust per protocol and escalate; check bleeding signs","Ignore","Give aspirin"], answerIndex:1, explanation:"High INR increases bleeding risk—follow local protocol and assess bleeding." },
+
+  // Acute
+  { pack:"Year 2", track:"ACUTE", topic:"Cardiovascular", subtopic:"ACS prioritisation", q:"Patient has central chest pain, sweaty, nauseated. Priority nursing action?", choices:["Offer antacid and wait","Obtain ECG urgently and escalate per pathway","Ask them to walk to relieve stress","Give food"], answerIndex:1, explanation:"Suspected ACS is time-critical: ECG + escalation." },
+  { pack:"Year 2", track:"ACUTE", topic:"Cardiovascular", subtopic:"Shock basics", q:"Which observation pattern suggests poor perfusion?", choices:["Warm peripheries, bounding pulse","Cool clammy skin, delayed cap refill, hypotension","Normal urine output and BP","High appetite"], answerIndex:1, explanation:"Low perfusion signs: cool clammy skin, delayed refill, hypotension, reduced urine output." }
+);
