@@ -1,13 +1,11 @@
 const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "nmcQuizProgress_v4";
-
-// Gather all questions from multiple files
+const STORAGE_KEY = "nmcQuizProgress_v5";
 const BANK = Array.isArray(window.QUESTION_BANK) ? window.QUESTION_BANK : [];
 
 const defaultProgress = () => ({
   overall: { answered: 0, correct: 0, streak: 0, lastDay: null },
-  topics: {}
+  topics: {} // topic -> { answered, correct, wrongIds, seenIds }
 });
 
 function loadProgress(){
@@ -86,24 +84,8 @@ function uniqueSubtopics(qs){
   return [...new Set(qs.map(q => q.subtopic).filter(Boolean))].sort();
 }
 
-/* =========================
-   PACK OPTIONS (SECTIONS)
-   ========================= */
-function uniquePacks(){
-  return [
-    "Y2: Long-term conditions",
-    "Y2: Acute & deterioration",
-    "Mixed Revision (Y2)",
-    "Safety Only",
-    "All packs"
-  ];
-}
-
-/* =========================
-   PACK FILTER LOGIC
-   ========================= */
+/* ========= Packs / Sections ========= */
 function packFilter(qs, pack){
-
   if(!pack || pack === "All packs") return qs;
 
   if(pack === "Y2: Long-term conditions"){
@@ -142,9 +124,7 @@ function applyFilters(){
 
   let qs = packFilter(BANK, pack);
 
-  if(sub){
-    qs = qs.filter(q => q.subtopic === sub);
-  }
+  if(sub) qs = qs.filter(q => q.subtopic === sub);
   if(query){
     qs = qs.filter(q =>
       (q.topic || "").toLowerCase().includes(query) ||
@@ -163,24 +143,40 @@ function updateHeaderStats(){
   $("statTopics").textContent = uniqueTopics(BANK).length;
 }
 
-function renderPackSelect(){
-  const packs = uniquePacks();
-  $("packSelect").innerHTML = packs.map(p => `<option value="${p}">${p}</option>`).join("");
-
-  // DEFAULT = LONG TERM
-  $("packSelect").value = "Y2: Long-term conditions";
-}
-
 function renderSubtopicSelect(){
   const pack = $("packSelect").value;
-  const filteredForPack = packFilter(BANK, pack);
-  const subs = uniqueSubtopics(filteredForPack);
+  const filtered = packFilter(BANK, pack);
+  const subs = uniqueSubtopics(filtered);
 
+  const current = $("subtopicSelect").value;
   $("subtopicSelect").innerHTML =
     `<option value="">All subtopics</option>` +
     subs.map(s => `<option value="${s}">${s}</option>`).join("");
+
+  if(current && subs.includes(current)) $("subtopicSelect").value = current;
 }
 
+/* ========= Tabs ========= */
+function showTab(tab){
+  const map = {
+    home: $("homeSection"),
+    quiz: $("quizSection"),
+    stats: $("statsSection"),
+    tools: $("toolsSection"),
+  };
+  Object.values(map).forEach(el => el.classList.add("hidden"));
+  map[tab].classList.remove("hidden");
+
+  document.querySelectorAll(".tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+
+  if(tab === "stats") renderStats();
+}
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", ()=> showTab(btn.dataset.tab));
+});
+
+/* ========= Home topic cards ========= */
 function buildTopicCard(topic, qsInTopic){
   const st = topicStats(topic);
   const totalQs = qsInTopic.length;
@@ -213,7 +209,7 @@ function renderTopics(){
   grid.innerHTML = "";
 
   const qs = applyFilters();
-  let topics = uniqueTopics(qs);
+  const topics = uniqueTopics(qs);
 
   topics.forEach(t => {
     const qsInTopic = qs.filter(q => q.topic === t);
@@ -223,6 +219,7 @@ function renderTopics(){
   updateHeaderStats();
 }
 
+/* ========= Quiz state ========= */
 let state = {
   running:false,
   mode:"quiz",
@@ -234,18 +231,6 @@ let state = {
   activeQ:null,
   pack:"Y2: Long-term conditions"
 };
-
-function showHome(){
-  state.running = false;
-  $("homeSection").classList.remove("hidden");
-  $("quizSection").classList.add("hidden");
-  renderSubtopicSelect();
-  renderTopics();
-}
-function showQuiz(){
-  $("homeSection").classList.add("hidden");
-  $("quizSection").classList.remove("hidden");
-}
 
 function updateQuizUI(){
   const total = state.deck.length || 1;
@@ -403,7 +388,7 @@ function finish(){
   setStatus("Finished");
 
   $("restartBtn").addEventListener("click", ()=> start(state.topic));
-  $("homeBtn").addEventListener("click", showHome);
+  $("homeBtn").addEventListener("click", ()=> showTab("home"));
 }
 
 function buildDeckForMode(topic){
@@ -430,6 +415,7 @@ function buildDeckForMode(topic){
     return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
   }
 
+  // spaced
   const weights = all.map(q => {
     const wrong = (wrongMap[qId(q)] ?? 0);
     const seen = (seenMap[qId(q)] ?? 0);
@@ -449,18 +435,87 @@ function start(topic){
   state.score = 0;
   state.running = true;
 
-  showQuiz();
+  showTab("quiz");
   renderQuestion();
 }
 
+/* ========= Stats page ========= */
+function renderStats(){
+  const topics = Object.keys(progress.topics);
+  const rows = topics.map(t => {
+    const st = topicStats(t);
+    return { topic:t, answered:st.answered, accuracy:st.accuracy };
+  });
+
+  rows.sort((a,b)=> (a.accuracy - b.accuracy) || (b.answered - a.answered));
+
+  // Weakest topics list
+  const weak = rows.filter(r => r.answered >= 5).slice(0, 8);
+  $("weakTopics").innerHTML = weak.length
+    ? weak.map(r => `<div class="barRow"><div class="barLabel">${r.topic}</div><div class="barOuter"><div class="barInner" style="width:${r.accuracy}%"></div></div><div class="barPct">${r.accuracy}%</div></div>`).join("")
+    : `<div class="note muted">Answer at least 5 questions in a topic to see “weakest topics”.</div>`;
+
+  // Accuracy bars for all topics
+  const all = rows.sort((a,b)=> a.topic.localeCompare(b.topic));
+  $("topicBars").innerHTML = all.length
+    ? all.map(r => `<div class="barRow"><div class="barLabel">${r.topic}</div><div class="barOuter"><div class="barInner" style="width:${r.accuracy}%"></div></div><div class="barPct">${r.accuracy}%</div></div>`).join("")
+    : `<div class="note muted">No data yet. Start a quiz to generate stats.</div>`;
+}
+
+/* ========= Tools: ABG checker ========= */
+function parseNum(x){
+  const n = Number(String(x).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function interpretABG(ph, co2, hco3){
+  // refs: pH 7.35–7.45, CO2 4.7–6.0 kPa, HCO3 22–26
+  const phLow = ph < 7.35, phHigh = ph > 7.45;
+  const co2High = co2 > 6.0, co2Low = co2 < 4.7;
+  const hco3High = hco3 > 26, hco3Low = hco3 < 22;
+
+  if(!phLow && !phHigh && !co2High && !co2Low && !hco3High && !hco3Low){
+    return "Looks normal overall (within typical reference ranges).";
+  }
+
+  // Determine primary by pH direction
+  if(phLow){
+    // acidaemia
+    if(co2High && !hco3Low) return "Respiratory acidosis (likely acute if HCO₃⁻ is normal).";
+    if(hco3Low && !co2High) return "Metabolic acidosis (CO₂ may fall if compensating).";
+    if(co2High && hco3Low) return "Mixed acidosis (respiratory + metabolic).";
+    return "Acidaemia present — pattern unclear (check values/clinical context).";
+  }
+
+  if(phHigh){
+    // alkalaemia
+    if(co2Low && !hco3High) return "Respiratory alkalosis (likely acute if HCO₃⁻ is normal).";
+    if(hco3High && !co2Low) return "Metabolic alkalosis (CO₂ may rise if compensating).";
+    if(co2Low && hco3High) return "Mixed alkalosis (respiratory + metabolic).";
+    return "Alkalaemia present — pattern unclear (check values/clinical context).";
+  }
+
+  // pH normal but CO2/HCO3 abnormal => compensated or mixed
+  if(co2High && hco3High) return "Compensated respiratory acidosis (chronic/compensated pattern).";
+  if(co2Low && hco3Low) return "Compensated respiratory alkalosis (chronic/compensated pattern).";
+  if(hco3High && co2High) return "Compensated metabolic alkalosis pattern (consider full ABG).";
+  if(hco3Low && co2Low) return "Compensated metabolic acidosis pattern (consider full ABG).";
+  return "Possible compensation — interpret with clinical context and full ABG."
+}
+
+/* ========= Wiring ========= */
 function resetProgress(){
   progress = defaultProgress();
   saveProgress(progress);
-  showHome();
+  updateHeaderStats();
+  renderTopics();
+  renderStats();
 }
 
 function init(){
-  renderPackSelect();
+  // default pack: LTC
+  $("packSelect").value = "Y2: Long-term conditions";
+
   renderSubtopicSelect();
   updateHeaderStats();
   renderTopics();
@@ -474,10 +529,31 @@ function init(){
   $("searchInput").addEventListener("input", renderTopics);
   $("modeSelect").addEventListener("change", renderTopics);
 
-  $("backBtn").addEventListener("click", showHome);
+  $("backBtn").addEventListener("click", ()=> showTab("home"));
   $("nextBtn").addEventListener("click", next);
   $("revealBtn").addEventListener("click", reveal);
   $("resetProgressBtn").addEventListener("click", resetProgress);
+
+  // Tools
+  $("abgBtn").addEventListener("click", ()=>{
+    const ph = parseNum($("abgPH").value);
+    const co2 = parseNum($("abgCO2").value);
+    const hco3 = parseNum($("abgHCO3").value);
+    if(ph===null || co2===null || hco3===null){
+      $("abgOut").textContent = "Enter valid numbers for pH, PaCO₂ (kPa), and HCO₃⁻.";
+      return;
+    }
+    $("abgOut").textContent = interpretABG(ph, co2, hco3);
+  });
+
+  $("openWeakBtn").addEventListener("click", ()=>{
+    $("modeSelect").value = "weak";
+    showTab("home");
+    renderTopics();
+  });
+
+  // start on Home
+  showTab("home");
 }
 
 init();
