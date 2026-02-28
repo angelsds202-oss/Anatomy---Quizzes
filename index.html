@@ -3,20 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>NMC-Style Anatomy & A&P Quizzes</title>
+  <title>NMC-Style A&P Quizzes (Y2)</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="wrap">
     <div class="topbar">
       <div>
-        <h1>🧠 NMC-Style A&P Quizzes</h1>
-        <p class="sub">Prioritisation • safety • escalation • A&P with clinical reasoning</p>
+        <h1>🧠 NMC-Style A&P Quizzes (Y2)</h1>
+        <p class="sub">Long-term conditions • Acute deterioration • Safe meds • Scenario questions</p>
       </div>
       <div class="top-actions">
         <button class="btn ghost" id="resetProgressBtn" title="Clears saved progress">Reset progress</button>
       </div>
     </div>
+
+    <nav class="tabs">
+      <button class="tab active" data-tab="home">Home</button>
+      <button class="tab" data-tab="quiz">Quiz</button>
+      <button class="tab" data-tab="stats">Stats</button>
+      <button class="tab" data-tab="tools">Tools</button>
+    </nav>
 
     <div class="panel">
       <div class="row">
@@ -40,8 +47,14 @@
         <div class="grow"></div>
 
         <div class="field">
-          <label>Exam pack</label>
-          <select id="packSelect"></select>
+          <label>Section (Pack)</label>
+          <select id="packSelect">
+            <option>Y2: Long-term conditions</option>
+            <option>Y2: Acute & deterioration</option>
+            <option>Mixed Revision (Y2)</option>
+            <option>Safety Only</option>
+            <option>All packs</option>
+          </select>
         </div>
 
         <div class="field">
@@ -69,22 +82,13 @@
       <div class="row">
         <div class="field grow">
           <label>Search</label>
-          <input id="searchInput" type="text" placeholder="Search topics/subtopics (e.g., ABG, AKI, sepsis, insulin)..." />
+          <input id="searchInput" type="text" placeholder="Search topics/subtopics (e.g., COPD, HF, CKD, insulin, sepsis, ABG)..." />
         </div>
 
         <div class="field">
-          <label>Filter by subtopic</label>
+          <label>Subtopic</label>
           <select id="subtopicSelect">
             <option value="">All subtopics</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label>Sort</label>
-          <select id="sortSelect">
-            <option value="name">Topic name</option>
-            <option value="weakest">Weakest first</option>
-            <option value="mostAnswered">Most answered</option>
           </select>
         </div>
       </div>
@@ -92,14 +96,16 @@
   </header>
 
   <main class="wrap">
+    <!-- HOME -->
     <section id="homeSection">
       <div class="section-title">
-        <h2>Body systems & safety packs</h2>
-        <p class="sub">Pick a topic. Packs narrow what you see (Year 1/2/3 + safety).</p>
+        <h2>Pick a body system</h2>
+        <p class="sub">Use the Section dropdown for Long-term vs Acute. Then select a topic.</p>
       </div>
       <div class="grid" id="topicGrid"></div>
     </section>
 
+    <!-- QUIZ -->
     <section id="quizSection" class="hidden">
       <div class="quiz-head">
         <div>
@@ -109,9 +115,7 @@
         </div>
 
         <div class="quiz-right">
-          <div class="progress">
-            <div class="bar" id="bar"></div>
-          </div>
+          <div class="progress"><div class="bar" id="bar"></div></div>
           <div class="scoreline">
             <span class="pill soft" id="packPill">Pack</span>
             <span class="pill soft" id="modePill">Mode</span>
@@ -129,9 +133,72 @@
         <div id="questionArea"></div>
       </div>
     </section>
+
+    <!-- STATS -->
+    <section id="statsSection" class="hidden">
+      <div class="section-title">
+        <h2>Your stats</h2>
+        <p class="sub">This updates automatically as you answer questions.</p>
+      </div>
+
+      <div class="grid stats-grid">
+        <div class="card">
+          <h3 class="h3">Weakest topics</h3>
+          <div id="weakTopics"></div>
+        </div>
+
+        <div class="card">
+          <h3 class="h3">Accuracy by topic</h3>
+          <div id="topicBars"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOOLS -->
+    <section id="toolsSection" class="hidden">
+      <div class="section-title">
+        <h2>Tools</h2>
+        <p class="sub">Quick practice without starting a full quiz.</p>
+      </div>
+
+      <div class="grid tools-grid">
+        <div class="card">
+          <h3 class="h3">ABG / Acid–Base checker</h3>
+          <div class="row">
+            <div class="field grow">
+              <label>pH</label>
+              <input id="abgPH" type="text" placeholder="e.g., 7.28" />
+            </div>
+            <div class="field grow">
+              <label>PaCO₂ (kPa)</label>
+              <input id="abgCO2" type="text" placeholder="e.g., 7.2" />
+            </div>
+            <div class="field grow">
+              <label>HCO₃⁻ (mmol/L)</label>
+              <input id="abgHCO3" type="text" placeholder="e.g., 24" />
+            </div>
+          </div>
+          <div style="height:10px"></div>
+          <button class="btn" id="abgBtn">Interpret ABG</button>
+          <div style="height:10px"></div>
+          <div class="note" id="abgOut">Enter values and hit Interpret.</div>
+          <div class="note muted">Typical refs: pH 7.35–7.45 • PaCO₂ 4.7–6.0 kPa • HCO₃⁻ 22–26</div>
+        </div>
+
+        <div class="card">
+          <h3 class="h3">NMC-style prioritisation rule</h3>
+          <div class="note">
+            If you’re stuck: go **ABCDE**, treat the life threat, escalate early.  
+            The “right answer” is usually the option that protects airway/breathing/circulation **first**.
+          </div>
+          <div style="height:10px"></div>
+          <button class="btn ghost" id="openWeakBtn">Do Weak Areas now</button>
+        </div>
+      </div>
+    </section>
   </main>
 
-  <!-- Question banks (multi-file) -->
+  <!-- Multi-file question banks -->
   <script src="questions_core.js"></script>
   <script src="questions_cardio.js"></script>
   <script src="questions_resp.js"></script>
