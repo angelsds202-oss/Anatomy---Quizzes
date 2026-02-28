@@ -19,3 +19,12 @@ window.QUESTION_BANK.push(
   { pack:"Year 2", track:"ACUTE", topic:"Haematology", subtopic:"DVT concern", q:"A patient has unilateral calf swelling and tenderness. Best action?", choices:["Massage calf","Escalate for DVT assessment pathway","Encourage sprinting","Ignore if young"], answerIndex:1, explanation:"DVT can embolise to PE—needs prompt assessment." },
   { pack:"Year 2", track:"ACUTE", topic:"Reproductive", subtopic:"Ectopic red flags", q:"Which is most concerning for ectopic pregnancy?", choices:["Mild nausea only","Unilateral pelvic pain + vaginal bleeding + dizziness/syncope","Back itch","Runny nose"], answerIndex:1, explanation:"Ectopic pregnancy can rupture and cause collapse—urgent assessment." }
 );
+window.QUESTION_BANK.push(
+  // ===== LTC: anaemia and anticoag safety =====
+  { pack:"Year 2", track:"LTC", topic:"Haematology", subtopic:"Anaemia assessment", q:"Which is an important nursing assessment in symptomatic anaemia?", choices:["Resp rate, HR, fatigue, exertional dyspnoea, pallor","Only appetite","Only hearing","Only skin temperature"], answerIndex:0, explanation:"Anaemia affects oxygen delivery—assess cardio-respiratory compensation symptoms." },
+  { pack:"Year 2", track:"LTC", topic:"Haematology", subtopic:"Iron therapy", q:"Oral iron commonly causes:", choices:["Constipation and dark stools","High fever","Low BP immediately","Hair loss"], answerIndex:0, explanation:"Iron often causes GI upset/constipation and dark stools—patient education helps adherence." },
+
+  // ===== ACUTE: DVT/PE link, transfusion reaction =====
+  { pack:"Year 2", track:"ACUTE", topic:"Haematology", subtopic:"PE link", q:"Why is DVT assessment urgent?", choices:["It causes asthma","It can embolise to the lungs causing PE","It cures oedema","It improves perfusion"], answerIndex:1, explanation:"DVT can lead to PE; prompt assessment reduces harm." },
+  { pack:"Year 2", track:"ACUTE", topic:"Haematology", subtopic:"Transfusion reaction", q:"During a transfusion the patient develops fever, chills and shortness of breath. What is best?", choices:["Continue slowly","Stop transfusion and escalate per protocol","Give food","Wait 1 hour"], answerIndex:1, explanation:"Stop transfusion and follow reaction protocol immediately." }
+);
