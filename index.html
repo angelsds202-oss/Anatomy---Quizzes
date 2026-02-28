@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Anatomy Quizzes</title>
+  <style>
+    :root { --bg:#0b1020; --card:#121a33; --text:#e9ecf5; --muted:#a8b0c6; --good:#30c48d; --bad:#ff5a7a; --accent:#6ea8fe; }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    body { margin:0; background: linear-gradient(180deg, #0b1020, #070a14); color:var(--text); }
+    header { padding: 24px 16px; max-width: 980px; margin: 0 auto; }
+    h1 { margin:0 0 6px; font-size: 28px; }
+    p { margin:0; color: var(--muted); }
+    main { max-width: 980px; margin: 0 auto; padding: 0 16px 40px; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 14px; }
+    @media(min-width: 860px){ .grid { grid-template-columns: 360px 1fr; align-items:start; } }
+    .card { background: rgba(18,26,51,.92); border: 1px solid rgba(255,255,255,.08); border-radius: 16px; padding: 16px; box-shadow: 0 12px 30px rgba(0,0,0,.25); }
+    .row { display:flex; gap:10px; flex-wrap: wrap; align-items:center; }
+    select, button, input[type="text"] { background:#0f1630; color:var(--text); border:1px solid rgba(255,255,255,.12); padding:10px 12px; border-radius: 12px; font-size: 14px; }
+    button { cursor:pointer; border-color: rgba(110,168,254,.4); }
+    button:hover { filter: brightness(1.06); }
+    .pill { padding:6px 10px; border-radius:999px; background: rgba(110,168,254,.14); border:1px solid rgba(110,168,254,.35); color: var(--text); font-size: 12px; }
+    .muted { color: var(--muted); }
+    .q { font-size: 18px; margin: 0 0 12px; }
+    .choices { display:grid; gap:10px; }
+    .choice { text-align:left; width:100%; padding:12px; border-radius: 14px; border:1px solid rgba(255,255,255,.12); background:#0f1630; }
+    .choice.correct { border-color: rgba(48,196,141,.65); background: rgba(48,196,141,.15); }
+    .choice.wrong { border-color: rgba(255,90,122,.65); background: rgba(255,90,122,.12); }
+    .spacer { height: 10px; }
+    .big { font-size: 20px; }
+    .progress { height: 10px; background: rgba(255,255,255,.08); border-radius: 999px; overflow:hidden; }
+    .bar { height: 100%; width:0%; background: linear-gradient(90deg, var(--accent), #9b7bff); }
+    .footer { margin-top: 10px; font-size: 12px; color: var(--muted); }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🧠 Anatomy Quizzes</h1>
+  <p>Quick MCQs + instant feedback. Built for nursing revision.</p>
+</header>
+
+<main class="grid">
+  <section class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div>
+        <div class="pill" id="statusPill">Ready</div>
+        <div class="spacer"></div>
+        <div class="muted">Pick a topic, then hit Start.</div>
+      </div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <label class="muted" for="topic">Topic</label><br/>
+    <select id="topic"></select>
+
+    <div class="spacer"></div>
+
+    <label class="muted" for="mode">Mode</label><br/>
+    <select id="mode">
+      <option value="quiz">Quiz (scored)</option>
+      <option value="practice">Practice (no pressure)</option>
+    </select>
+
+    <div class="spacer"></div>
+
+    <label class="muted" for="limit">Questions</label><br/>
+    <select id="limit">
+      <option value="5">5</option>
+      <option value="10" selected>10</option>
+      <option value="15">15</option>
+      <option value="999">All</option>
+    </select>
+
+    <div class="spacer"></div>
+
+    <button id="startBtn">Start</button>
+    <button id="resetBtn">Reset</button>
+
+    <div class="spacer"></div>
+
+    <div class="footer">
+      Tip: You can add new questions by editing the <b>QUESTION_BANK</b> section in the code.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between;">
+      <div class="big" id="topicTitle">Select a topic</div>
+      <div class="pill" id="scorePill">Score: 0</div>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="progress"><div class="bar" id="bar"></div></div>
+    <div class="spacer"></div>
+
+    <div class="muted" id="meta">No quiz running.</div>
+    <div class="spacer"></div>
+
+    <div id="questionArea">
+      <p class="muted">Hit <b>Start</b> to begin.</p>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="row">
+      <button id="nextBtn" disabled>Next</button>
+      <button id="revealBtn" disabled>Reveal Answer</button>
+    </div>
+  </section>
+</main>
+
+<script>
+/** =========================
+ *  EDIT YOUR QUESTIONS HERE
+ *  =========================
+ *  Each question:
+ *  { topic, q, choices: [], answerIndex, explanation }
+ */
+const QUESTION_BANK = [
+  // Cardiovascular
+  { topic:"Cardiovascular", q:"Which valve lies between the left atrium and left ventricle?", choices:["Tricuspid","Mitral (bicuspid)","Pulmonary","Aortic"], answerIndex:1, explanation:"Mitral valve separates left atrium and left ventricle." },
+  { topic:"Cardiovascular", q:"The pacemaker of the heart is the…", choices:["AV node","Bundle of His","SA node","Purkinje fibres"], answerIndex:2, explanation:"SA node initiates the electrical impulse." },
+  { topic:"Cardiovascular", q:"Which vessel carries oxygenated blood from the lungs to the heart?", choices:["Pulmonary artery","Pulmonary vein","Aorta","Vena cava"], answerIndex:1, explanation:"Pulmonary veins return oxygenated blood to the left atrium." },
+
+  // Respiratory
+  { topic:"Respiratory", q:"Gas exchange occurs primarily in the…", choices:["Trachea","Bronchi","Alveoli","Pleura"], answerIndex:2, explanation:"Alveoli have a thin membrane and large surface area for diffusion." },
+  { topic:"Respiratory", q:"Which muscle is the main driver of normal inspiration?", choices:["Diaphragm","Internal intercostals","Rectus abdominis","Trapezius"], answerIndex:0, explanation:"The diaphragm contracts and flattens to increase thoracic volume." },
+
+  // Musculoskeletal
+  { topic:"Musculoskeletal", q:"A tendon connects…", choices:["Bone to bone","Muscle to bone","Nerve to muscle","Cartilage to bone"], answerIndex:1, explanation:"Tendons transmit force from muscle to bone." },
+  { topic:"Musculoskeletal", q:"Which is a ball-and-socket joint?", choices:["Elbow","Knee","Shoulder","Wrist"], answerIndex:2, explanation:"Shoulder (and hip) allow multi-directional movement." },
+
+  // Nervous
+  { topic:"Nervous", q:"Which part of the neuron speeds up conduction via saltatory conduction?", choices:["Dendrites","Myelin sheath","Nucleus","Synaptic cleft"], answerIndex:1, explanation:"Myelin allows impulses to jump between nodes of Ranvier." },
+];
+
+const $ = (id) => document.getElementById(id);
+
+let state = {
+  running:false,
+  mode:"quiz",
+  topic:null,
+  deck:[],
+  idx:0,
+  score:0,
+  answered:false,
+  lastWasCorrect:false,
+};
+
+function shuffle(arr){
+  const a = [...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [a[i],a[j]] = [a[j],a[i]];
+  }
+  return a;
+}
+
+function uniqueTopics(){
+  return [...new Set(QUESTION_BANK.map(x => x.topic))].sort();
+}
+
+function setPill(el, text){
+  el.textContent = text;
+}
+
+function renderTopicSelect(){
+  const t = uniqueTopics();
+  $("topic").innerHTML = t.map(x => `<option value="${x}">${x}</option>`).join("");
+  state.topic = t[0] ?? null;
+  $("topicTitle").textContent = state.topic ? `${state.topic} Quiz` : "Select a topic";
+}
+
+function buildDeck(){
+  const topic = $("topic").value;
+  const limit = parseInt($("limit").value, 10);
+  const all = QUESTION_BANK.filter(q => q.topic === topic);
+  const deck = shuffle(all);
+  return (limit >= 999) ? deck : deck.slice(0, Math.min(limit, deck.length));
+}
+
+function updateProgress(){
+  const total = state.deck.length || 1;
+  const pct = state.running ? ((state.idx)/total)*100 : 0;
+  $("bar").style.width = `${pct}%`;
+  $("meta").textContent = state.running
+    ? `Question ${Math.min(state.idx+1, total)} of ${total}`
+    : "No quiz running.";
+  $("scorePill").textContent = `Score: ${state.score}`;
+}
+
+function renderQuestion(){
+  const q = state.deck[state.idx];
+  if(!q){
+    finish();
+    return;
+  }
+  state.answered = false;
+
+  $("questionArea").innerHTML = `
+    <div class="q">${q.q}</div>
+    <div class="choices">
+      ${q.choices.map((c, i) => `
+        <button class="choice" data-i="${i}">${c}</button>
+      `).join("")}
+    </div>
+    <div class="spacer"></div>
+    <div class="muted" id="explain"></div>
+  `;
+
+  document.querySelectorAll(".choice").forEach(btn => {
+    btn.addEventListener("click", () => choose(parseInt(btn.dataset.i, 10)));
+  });
+
+  $("nextBtn").disabled = true;
+  $("revealBtn").disabled = false;
+
+  updateProgress();
+}
+
+function choose(i){
+  if(state.answered) return;
+  const q = state.deck[state.idx];
+  state.answered = true;
+
+  const buttons = [...document.querySelectorAll(".choice")];
+  buttons.forEach((b, idx) => {
+    if(idx === q.answerIndex) b.classList.add("correct");
+    if(idx === i && i !== q.answerIndex) b.classList.add("wrong");
+    b.disabled = true;
+  });
+
+  const correct = (i === q.answerIndex);
+  state.lastWasCorrect = correct;
+
+  if(state.mode === "quiz" && correct) state.score += 1;
+
+  $("explain").textContent = q.explanation || "";
+  $("nextBtn").disabled = false;
+  $("revealBtn").disabled = true;
+
+  setPill($("statusPill"), correct ? "✅ Correct" : "❌ Not quite");
+  $("scorePill").textContent = `Score: ${state.score}`;
+}
+
+function reveal(){
+  if(state.answered) return;
+  const q = state.deck[state.idx];
+  const buttons = [...document.querySelectorAll(".choice")];
+  buttons.forEach((b, idx) => {
+    if(idx === q.answerIndex) b.classList.add("correct");
+    b.disabled = true;
+  });
+  state.answered = true;
+  $("explain").textContent = q.explanation || "";
+  $("nextBtn").disabled = false;
+  $("revealBtn").disabled = true;
+  setPill($("statusPill"), "👀 Revealed");
+}
+
+function next(){
+  if(!state.running) return;
+  state.idx += 1;
+  setPill($("statusPill"), "Running");
+  renderQuestion();
+}
+
+function finish(){
+  state.running = false;
+  $("nextBtn").disabled = true;
+  $("revealBtn").disabled = true;
+
+  const total = state.deck.length;
+  const pct = total ? Math.round((state.score/total)*100) : 0;
+
+  $("questionArea").innerHTML = `
+    <div class="big">Done 🎉</div>
+    <div class="spacer"></div>
+    <div class="muted">Score: <b>${state.score}</b> / ${total} (${pct}%)</div>
+    <div class="spacer"></div>
+    <button onclick="start()">Restart</button>
+  `;
+  $("bar").style.width = "100%";
+  $("meta").textContent = `Finished • ${total} questions`;
+  setPill($("statusPill"), "Finished");
+}
+
+function start(){
+  state.mode = $("mode").value;
+  state.topic = $("topic").value;
+  state.deck = buildDeck();
+  state.idx = 0;
+  state.score = 0;
+  state.running = true;
+
+  $("topicTitle").textContent = `${state.topic} • ${state.mode === "quiz" ? "Quiz" : "Practice"}`;
+  setPill($("statusPill"), "Running");
+
+  renderQuestion();
+}
+
+function reset(){
+  state = { running:false, mode:"quiz", topic: $("topic").value, deck:[], idx:0, score:0, answered:false, lastWasCorrect:false };
+  $("topicTitle").textContent = `${$("topic").value} Quiz`;
+  $("questionArea").innerHTML = `<p class="muted">Hit <b>Start</b> to begin.</p>`;
+  $("nextBtn").disabled = true;
+  $("revealBtn").disabled = true;
+  setPill($("statusPill"), "Ready");
+  $("bar").style.width = "0%";
+  $("meta").textContent = "No quiz running.";
+  $("scorePill").textContent = "Score: 0";
+}
+
+$("startBtn").addEventListener("click", start);
+$("resetBtn").addEventListener("click", reset);
+$("nextBtn").addEventListener("click", next);
+$("revealBtn").addEventListener("click", reveal);
+
+$("topic").addEventListener("change", () => {
+  $("topicTitle").textContent = `${$("topic").value} Quiz`;
+  reset();
+});
+
+renderTopicSelect();
+reset();
+</script>
+</body>
+</html>
