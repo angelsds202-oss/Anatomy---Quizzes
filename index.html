@@ -3,19 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Anatomy Quizzes</title>
+  <title>NMC-Style Anatomy & A&P Quizzes</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="wrap">
     <div class="topbar">
       <div>
-        <h1>🧠 Anatomy Quizzes</h1>
-        <p class="sub">Body systems • instant feedback • weak-area training • progress tracking</p>
+        <h1>🧠 NMC-Style A&P Quizzes</h1>
+        <p class="sub">Prioritisation • safety • escalation • A&P with clinical reasoning</p>
       </div>
       <div class="top-actions">
         <button class="btn ghost" id="resetProgressBtn" title="Clears saved progress">Reset progress</button>
-        <a class="btn" id="githubHint" href="#" target="_blank" rel="noreferrer">Repo</a>
       </div>
     </div>
 
@@ -39,6 +38,11 @@
         </div>
 
         <div class="grow"></div>
+
+        <div class="field">
+          <label>Exam pack</label>
+          <select id="packSelect"></select>
+        </div>
 
         <div class="field">
           <label>Mode</label>
@@ -65,7 +69,14 @@
       <div class="row">
         <div class="field grow">
           <label>Search</label>
-          <input id="searchInput" type="text" placeholder="Search topics (e.g., renal, heart, hormones)..." />
+          <input id="searchInput" type="text" placeholder="Search topics/subtopics (e.g., ABG, AKI, sepsis, insulin)..." />
+        </div>
+
+        <div class="field">
+          <label>Filter by subtopic</label>
+          <select id="subtopicSelect">
+            <option value="">All subtopics</option>
+          </select>
         </div>
 
         <div class="field">
@@ -83,8 +94,8 @@
   <main class="wrap">
     <section id="homeSection">
       <div class="section-title">
-        <h2>Body systems</h2>
-        <p class="sub">Tap a system to start. Weak Areas & Spaced Review adapt based on your misses.</p>
+        <h2>Body systems & safety packs</h2>
+        <p class="sub">Pick a topic. Packs narrow what you see (Year 1/2/3 + safety).</p>
       </div>
       <div class="grid" id="topicGrid"></div>
     </section>
@@ -102,6 +113,7 @@
             <div class="bar" id="bar"></div>
           </div>
           <div class="scoreline">
+            <span class="pill soft" id="packPill">Pack</span>
             <span class="pill soft" id="modePill">Mode</span>
             <span class="pill soft" id="scorePill">Score: 0</span>
           </div>
@@ -117,17 +129,18 @@
         <div id="questionArea"></div>
       </div>
     </section>
-
-    <section class="footer">
-      <div class="card subtle">
-        <p>
-          Want diagram labeling quizzes next? We can add “image + hotspots” later (still free), or a simple drag-and-drop labeling mode.
-        </p>
-      </div>
-    </section>
   </main>
 
-  <script src="questions.js"></script>
+  <!-- Question banks (multi-file) -->
+  <script src="questions_core.js"></script>
+  <script src="questions_cardio.js"></script>
+  <script src="questions_resp.js"></script>
+  <script src="questions_renal.js"></script>
+  <script src="questions_neuro.js"></script>
+  <script src="questions_endo_gi.js"></script>
+  <script src="questions_infection_wounds.js"></script>
+  <script src="questions_haem_repro.js"></script>
+
   <script src="app.js"></script>
 </body>
 </html>
