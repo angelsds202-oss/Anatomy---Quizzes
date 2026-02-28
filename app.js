@@ -1,7 +1,11 @@
 const $ = (id) => document.getElementById(id);
 
-const BANK = window.QUESTION_BANK ?? [];
-const STORAGE_KEY = "anatomyQuizProgress_v1";
+const STORAGE_KEY = "nmcQuizProgress_v2";
+
+// Collect questions from multiple files
+const BANK = Array.isArray(window.QUESTION_BANK) ? window.QUESTION_BANK : [];
+// Each questions_*.js file should push into window.QUESTION_BANK.
+// If you used my files below, this is already handled.
 
 const defaultProgress = () => ({
   overall: { answered: 0, correct: 0, streak: 0, lastDay: null },
@@ -26,38 +30,9 @@ function todayKey(){
 }
 
 function qId(q){
-  // stable id: topic|question text
-  return `${q.topic}||${q.q}`;
+  // stable id includes subtopic + pack + question text
+  return `${q.topic}||${q.subtopic || ""}||${q.pack || ""}||${q.q}`;
 }
-
-function uniqueTopics(){
-  return [...new Set(BANK.map(q => q.topic))].sort();
-}
-
-function topicStats(topic, prog){
-  const t = prog.topics[topic] || { answered:0, correct:0, wrongIds:{}, seenIds:{} };
-  const acc = t.answered ? Math.round((t.correct/t.answered)*100) : 0;
-  return { ...t, accuracy: acc };
-}
-
-function overallStats(prog){
-  const o = prog.overall;
-  const acc = o.answered ? Math.round((o.correct/o.answered)*100) : 0;
-  return { ...o, accuracy: acc };
-}
-
-let progress = loadProgress();
-
-let state = {
-  running:false,
-  mode:"quiz",
-  topic:null,
-  deck:[],
-  idx:0,
-  score:0,
-  answered:false,
-  activeQ:null,
-};
 
 function shuffle(arr){
   const a = [...arr];
@@ -68,7 +43,6 @@ function shuffle(arr){
   return a;
 }
 
-// weighted selection: wrong questions appear more often in weak/spaced
 function weightedPick(questions, weights, limit){
   const pool = questions.map((q,i)=>({q, w: Math.max(1, weights[i] ?? 1)}));
   const picked = [];
@@ -87,6 +61,8 @@ function weightedPick(questions, weights, limit){
   return picked;
 }
 
+let progress = loadProgress();
+
 function ensureTopicRecord(topic){
   if(!progress.topics[topic]){
     progress.topics[topic] = { answered:0, correct:0, wrongIds:{}, seenIds:{} };
@@ -94,22 +70,92 @@ function ensureTopicRecord(topic){
   return progress.topics[topic];
 }
 
+function topicStats(topic){
+  const t = progress.topics[topic] || { answered:0, correct:0, wrongIds:{}, seenIds:{} };
+  const acc = t.answered ? Math.round((t.correct/t.answered)*100) : 0;
+  return { ...t, accuracy: acc };
+}
+function overallStats(){
+  const o = progress.overall;
+  const acc = o.answered ? Math.round((o.correct/o.answered)*100) : 0;
+  return { ...o, accuracy: acc };
+}
+
+function uniqueTopics(qs){
+  return [...new Set(qs.map(q => q.topic))].sort();
+}
+function uniqueSubtopics(qs){
+  return [...new Set(qs.map(q => q.subtopic).filter(Boolean))].sort();
+}
+function uniquePacks(qs){
+  const base = [...new Set(qs.map(q => q.pack).filter(Boolean))].sort();
+  // Always include "All"
+  return ["All packs", ...base];
+}
+
+function applyFilters(){
+  const pack = $("packSelect").value;
+  const sub = $("subtopicSelect").value;
+  const query = $("searchInput").value.trim().toLowerCase();
+
+  let qs = BANK;
+
+  if(pack && pack !== "All packs"){
+    qs = qs.filter(q => q.pack === pack);
+  }
+  if(sub){
+    qs = qs.filter(q => q.subtopic === sub);
+  }
+  if(query){
+    qs = qs.filter(q =>
+      (q.topic || "").toLowerCase().includes(query) ||
+      (q.subtopic || "").toLowerCase().includes(query) ||
+      (q.q || "").toLowerCase().includes(query)
+    );
+  }
+  return qs;
+}
+
 function updateHeaderStats(){
-  const o = overallStats(progress);
+  const o = overallStats();
   $("statStreak").textContent = o.streak;
   $("statAccuracy").textContent = `${o.accuracy}%`;
   $("statAnswered").textContent = o.answered;
-  $("statTopics").textContent = uniqueTopics().length;
+  $("statTopics").textContent = uniqueTopics(BANK).length;
 }
 
-function buildTopicCard(topic){
-  const st = topicStats(topic, progress);
-  const totalQs = BANK.filter(q => q.topic === topic).length;
+function renderPackSelect(){
+  const packs = uniquePacks(BANK);
+  $("packSelect").innerHTML = packs.map(p => `<option value="${p}">${p}</option>`).join("");
+}
+function renderSubtopicSelect(){
+  const filteredForPack = (() => {
+    const pack = $("packSelect").value;
+    if(!pack || pack === "All packs") return BANK;
+    return BANK.filter(q => q.pack === pack);
+  })();
+
+  const subs = uniqueSubtopics(filteredForPack);
+  const current = $("subtopicSelect").value;
+
+  $("subtopicSelect").innerHTML =
+    `<option value="">All subtopics</option>` +
+    subs.map(s => `<option value="${s}">${s}</option>`).join("");
+
+  // Keep selection if still exists
+  if(current && subs.includes(current)) $("subtopicSelect").value = current;
+}
+
+function buildTopicCard(topic, qsInTopic){
+  const st = topicStats(topic);
+  const totalQs = qsInTopic.length;
   const weakness = st.answered ? (100 - st.accuracy) : 100;
 
   const accPillClass = st.answered
     ? (st.accuracy >= 75 ? "good" : st.accuracy >= 50 ? "" : "bad")
     : "soft";
+
+  const commonSub = mostCommonSubtopic(qsInTopic);
 
   const div = document.createElement("div");
   div.className = "card topic";
@@ -117,7 +163,7 @@ function buildTopicCard(topic){
     <div class="head">
       <div>
         <div class="name">${topic}</div>
-        <div class="mini">${totalQs} questions • Weakness score: ${weakness}</div>
+        <div class="mini">${totalQs} questions • Common focus: ${commonSub || "Mixed"}</div>
       </div>
       <div class="badges">
         <span class="pill ${accPillClass}">${st.answered ? `${st.accuracy}%` : "New"}</span>
@@ -130,18 +176,32 @@ function buildTopicCard(topic){
   return div;
 }
 
+function mostCommonSubtopic(qs){
+  const map = new Map();
+  qs.forEach(q => {
+    const k = q.subtopic || "";
+    map.set(k, (map.get(k) || 0) + 1);
+  });
+  let best = "";
+  let bestN = 0;
+  for(const [k,v] of map.entries()){
+    if(v > bestN && k) { best = k; bestN = v; }
+  }
+  return best;
+}
+
 function renderTopics(){
   const grid = $("topicGrid");
   grid.innerHTML = "";
 
-  const query = $("searchInput").value.trim().toLowerCase();
+  const qs = applyFilters();
+  let topics = uniqueTopics(qs);
   const sort = $("sortSelect").value;
 
-  let topics = uniqueTopics().filter(t => t.toLowerCase().includes(query));
-
   topics.sort((a,b)=>{
-    const sa = topicStats(a, progress);
-    const sb = topicStats(b, progress);
+    const sa = topicStats(a);
+    const sb = topicStats(b);
+
     if(sort === "name") return a.localeCompare(b);
     if(sort === "weakest"){
       const wa = sa.answered ? sa.correct/sa.answered : 0;
@@ -154,15 +214,32 @@ function renderTopics(){
     return a.localeCompare(b);
   });
 
-  topics.forEach(t => grid.appendChild(buildTopicCard(t)));
+  topics.forEach(t => {
+    const qsInTopic = qs.filter(q => q.topic === t);
+    grid.appendChild(buildTopicCard(t, qsInTopic));
+  });
+
+  updateHeaderStats();
 }
+
+let state = {
+  running:false,
+  mode:"quiz",
+  topic:null,
+  deck:[],
+  idx:0,
+  score:0,
+  answered:false,
+  activeQ:null,
+  pack:"All packs",
+};
 
 function showHome(){
   state.running = false;
   $("homeSection").classList.remove("hidden");
   $("quizSection").classList.add("hidden");
+  renderSubtopicSelect();
   renderTopics();
-  updateHeaderStats();
 }
 
 function showQuiz(){
@@ -177,10 +254,48 @@ function updateQuizUI(){
   $("quizMeta").textContent = `Question ${Math.min(state.idx+1, total)} of ${total}`;
   $("scorePill").textContent = `Score: ${state.score}`;
   $("modePill").textContent = `Mode: ${state.mode}`;
+  $("packPill").textContent = `Pack: ${state.pack}`;
 }
 
 function setStatus(text){
   $("statusPill").textContent = text;
+}
+
+function markSeen(q){
+  const id = qId(q);
+  const t = ensureTopicRecord(q.topic);
+  t.seenIds[id] = (t.seenIds[id] ?? 0) + 1;
+}
+
+function recordResult(q, correct){
+  const id = qId(q);
+  const day = todayKey();
+
+  const t = ensureTopicRecord(q.topic);
+  t.answered += 1;
+  if(correct) t.correct += 1;
+
+  if(!correct){
+    t.wrongIds[id] = (t.wrongIds[id] ?? 0) + 1;
+  } else {
+    if(t.wrongIds[id]) t.wrongIds[id] = Math.max(0, t.wrongIds[id]-1);
+    if(t.wrongIds[id] === 0) delete t.wrongIds[id];
+  }
+
+  progress.overall.answered += 1;
+  if(correct) progress.overall.correct += 1;
+
+  const last = progress.overall.lastDay;
+  if(last !== day){
+    const lastDate = last ? new Date(last + "T00:00:00") : null;
+    const now = new Date(day + "T00:00:00");
+    const diffDays = lastDate ? Math.round((now - lastDate)/(1000*60*60*24)) : 999;
+    if(diffDays === 1) progress.overall.streak += 1;
+    else progress.overall.streak = 1;
+    progress.overall.lastDay = day;
+  }
+
+  saveProgress(progress);
 }
 
 function renderQuestion(){
@@ -197,6 +312,8 @@ function renderQuestion(){
   $("nextBtn").disabled = true;
   $("revealBtn").disabled = false;
 
+  $("quizTitle").textContent = `${q.topic} • ${q.subtopic || "Mixed"}`;
+
   $("questionArea").innerHTML = `
     <div class="q">${q.q}</div>
     <div class="choices">
@@ -212,53 +329,6 @@ function renderQuestion(){
   });
 
   updateQuizUI();
-}
-
-function markSeen(q){
-  const id = qId(q);
-  const t = ensureTopicRecord(q.topic);
-  t.seenIds[id] = (t.seenIds[id] ?? 0) + 1;
-}
-
-function recordResult(q, correct){
-  const id = qId(q);
-  const day = todayKey();
-
-  // topic stats
-  const t = ensureTopicRecord(q.topic);
-  t.answered += 1;
-  if(correct) t.correct += 1;
-
-  // wrong tracking for adaptive modes
-  if(!correct){
-    t.wrongIds[id] = (t.wrongIds[id] ?? 0) + 1;
-  } else {
-    // optional: decay wrong count slowly on correct
-    if(t.wrongIds[id]) t.wrongIds[id] = Math.max(0, t.wrongIds[id]-1);
-    if(t.wrongIds[id] === 0) delete t.wrongIds[id];
-  }
-
-  // overall stats
-  progress.overall.answered += 1;
-  if(correct) progress.overall.correct += 1;
-
-  // streak logic (daily)
-  const last = progress.overall.lastDay;
-  if(last === day){
-    // same day, streak unchanged
-  } else {
-    // if yesterday, keep streak; else reset
-    const lastDate = last ? new Date(last + "T00:00:00") : null;
-    const now = new Date(day + "T00:00:00");
-    const diffDays = lastDate ? Math.round((now - lastDate)/(1000*60*60*24)) : 999;
-
-    if(diffDays === 1) progress.overall.streak += 1;
-    else progress.overall.streak = 1;
-
-    progress.overall.lastDay = day;
-  }
-
-  saveProgress(progress);
 }
 
 function choose(i){
@@ -302,12 +372,13 @@ function reveal(){
   });
 
   markSeen(q);
-  // Reveals don’t count toward score; but we *do* treat it as wrong for training pressure.
+  // Reveals train weak areas as “wrong”
   recordResult(q, false);
 
   $("explain").textContent = q.explanation || "";
   $("nextBtn").disabled = false;
   $("revealBtn").disabled = true;
+
   setStatus("👀 Revealed");
   updateQuizUI();
 }
@@ -320,7 +391,6 @@ function next(){
 
 function finish(){
   state.running = false;
-
   $("revealBtn").disabled = true;
   $("nextBtn").disabled = true;
 
@@ -345,11 +415,17 @@ function finish(){
 function buildDeckForMode(topic){
   const mode = $("modeSelect").value;
   const limit = parseInt($("limitSelect").value, 10);
-  const all = BANK.filter(q => q.topic === topic);
+  const pack = $("packSelect").value;
+  const sub = $("subtopicSelect").value;
 
-  // ensure topic record exists for adaptive modes
+  let all = BANK.filter(q => q.topic === topic);
+
+  if(pack && pack !== "All packs") all = all.filter(q => q.pack === pack);
+  if(sub) all = all.filter(q => q.subtopic === sub);
+
   const t = ensureTopicRecord(topic);
   const wrongMap = t.wrongIds || {};
+  const seenMap = t.seenIds || {};
 
   if(mode === "quiz" || mode === "practice"){
     const deck = shuffle(all);
@@ -357,19 +433,15 @@ function buildDeckForMode(topic){
   }
 
   if(mode === "weak"){
-    // weight by wrong count (missed more => appears more)
     const weights = all.map(q => 1 + (wrongMap[qId(q)] ?? 0) * 3);
     const picked = weightedPick(all, weights, limit >= 999 ? all.length : limit);
     return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
   }
 
   if(mode === "spaced"){
-    // spaced review: prioritize wrong + less seen
-    const seenMap = t.seenIds || {};
     const weights = all.map(q => {
       const wrong = (wrongMap[qId(q)] ?? 0);
       const seen = (seenMap[qId(q)] ?? 0);
-      // more wrong => more weight; less seen => more weight
       return 1 + wrong * 4 + Math.max(0, 3 - seen);
     });
     const picked = weightedPick(all, weights, limit >= 999 ? all.length : limit);
@@ -382,12 +454,12 @@ function buildDeckForMode(topic){
 function start(topic){
   state.mode = $("modeSelect").value;
   state.topic = topic;
+  state.pack = $("packSelect").value || "All packs";
   state.deck = buildDeckForMode(topic);
   state.idx = 0;
   state.score = 0;
   state.running = true;
 
-  $("quizTitle").textContent = `${topic}`;
   showQuiz();
   renderQuestion();
 }
@@ -399,26 +471,25 @@ function resetProgress(){
 }
 
 function init(){
-  // optional: make "Repo" button try to point to current location (best-effort)
-  $("githubHint").addEventListener("click", (e)=>{
-    // If you want, replace this with your repo URL
-    // e.g. https://github.com/YourUserName/anatomy-quizzes
-    if($("githubHint").getAttribute("href") === "#"){
-      e.preventDefault();
-      alert("Set your repo link in index.html (the Repo button).");
-    }
+  // Pack select
+  renderPackSelect();
+  renderSubtopicSelect();
+  updateHeaderStats();
+  renderTopics();
+
+  $("packSelect").addEventListener("change", ()=>{
+    renderSubtopicSelect();
+    renderTopics();
   });
+
+  $("subtopicSelect").addEventListener("change", renderTopics);
+  $("searchInput").addEventListener("input", renderTopics);
+  $("sortSelect").addEventListener("change", renderTopics);
+  $("modeSelect").addEventListener("change", renderTopics);
 
   $("backBtn").addEventListener("click", showHome);
   $("nextBtn").addEventListener("click", next);
   $("revealBtn").addEventListener("click", reveal);
   $("resetProgressBtn").addEventListener("click", resetProgress);
-
-  $("searchInput").addEventListener("input", renderTopics);
-  $("sortSelect").addEventListener("change", renderTopics);
-  $("modeSelect").addEventListener("change", renderTopics);
-
-  updateHeaderStats();
-  renderTopics();
 }
 init();
