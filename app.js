@@ -1,13 +1,13 @@
 const $ = (id) => document.getElementById(id);
 
-const STORAGE_KEY = "nmcQuizProgress_v3";
+const STORAGE_KEY = "nmcQuizProgress_v4";
 
-// Gather all questions
+// Gather all questions from multiple files
 const BANK = Array.isArray(window.QUESTION_BANK) ? window.QUESTION_BANK : [];
 
 const defaultProgress = () => ({
   overall: { answered: 0, correct: 0, streak: 0, lastDay: null },
-  topics: {} // topic -> { answered, correct, wrongIds, seenIds }
+  topics: {}
 });
 
 function loadProgress(){
@@ -28,8 +28,7 @@ function todayKey(){
 }
 
 function qId(q){
-  // stable id includes key fields
-  return `${q.pack||""}||${q.topic||""}||${q.subtopic||""}||${q.q||""}`;
+  return `${q.pack||""}||${q.track||""}||${q.topic||""}||${q.subtopic||""}||${q.q||""}`;
 }
 
 function shuffle(arr){
@@ -86,33 +85,54 @@ function uniqueTopics(qs){
 function uniqueSubtopics(qs){
   return [...new Set(qs.map(q => q.subtopic).filter(Boolean))].sort();
 }
-function uniquePacks(qs){
-  const base = [...new Set(qs.map(q => q.pack).filter(Boolean))].sort();
-  // Add curated virtual packs
+
+/* =========================
+   PACK OPTIONS (SECTIONS)
+   ========================= */
+function uniquePacks(){
   return [
-    "Year 2 (default)",
+    "Y2: Long-term conditions",
+    "Y2: Acute & deterioration",
     "Mixed Revision (Y2)",
     "Safety Only",
-    "All packs",
-    ...base.filter(p => !["Year 2","Safety: Deterioration","Safety: Medicines","Safety: Infection"].includes(p))
+    "All packs"
   ];
 }
 
+/* =========================
+   PACK FILTER LOGIC
+   ========================= */
 function packFilter(qs, pack){
+
   if(!pack || pack === "All packs") return qs;
 
-  if(pack === "Year 2 (default)") {
-    return qs.filter(q => q.pack === "Year 2" || (q.pack || "").startsWith("Safety:"));
+  if(pack === "Y2: Long-term conditions"){
+    return qs.filter(q =>
+      q.pack === "Year 2" &&
+      (q.track === "LTC" || q.track === "BOTH")
+    );
   }
-  if(pack === "Mixed Revision (Y2)") {
-    // Year 2 + safety + some Year 1 foundations
-    return qs.filter(q => q.pack === "Year 2" || q.pack === "Year 1" || (q.pack || "").startsWith("Safety:"));
+
+  if(pack === "Y2: Acute & deterioration"){
+    return qs.filter(q =>
+      (q.pack === "Year 2" || (q.pack || "").startsWith("Safety:")) &&
+      (q.track === "ACUTE" || q.track === "BOTH" || (q.pack || "").startsWith("Safety:"))
+    );
   }
-  if(pack === "Safety Only") {
+
+  if(pack === "Mixed Revision (Y2)"){
+    return qs.filter(q =>
+      q.pack === "Year 2" ||
+      q.pack === "Year 1" ||
+      (q.pack || "").startsWith("Safety:")
+    );
+  }
+
+  if(pack === "Safety Only"){
     return qs.filter(q => (q.pack || "").startsWith("Safety:"));
   }
-  // direct match fallback
-  return qs.filter(q => q.pack === pack);
+
+  return qs;
 }
 
 function applyFilters(){
@@ -144,10 +164,11 @@ function updateHeaderStats(){
 }
 
 function renderPackSelect(){
-  const packs = uniquePacks(BANK);
+  const packs = uniquePacks();
   $("packSelect").innerHTML = packs.map(p => `<option value="${p}">${p}</option>`).join("");
-  // Default to Year 2 pack if not already set
-  if(!$("packSelect").value) $("packSelect").value = "Year 2 (default)";
+
+  // DEFAULT = LONG TERM
+  $("packSelect").value = "Y2: Long-term conditions";
 }
 
 function renderSubtopicSelect(){
@@ -155,12 +176,9 @@ function renderSubtopicSelect(){
   const filteredForPack = packFilter(BANK, pack);
   const subs = uniqueSubtopics(filteredForPack);
 
-  const current = $("subtopicSelect").value;
   $("subtopicSelect").innerHTML =
     `<option value="">All subtopics</option>` +
     subs.map(s => `<option value="${s}">${s}</option>`).join("");
-
-  if(current && subs.includes(current)) $("subtopicSelect").value = current;
 }
 
 function buildTopicCard(topic, qsInTopic){
@@ -177,7 +195,7 @@ function buildTopicCard(topic, qsInTopic){
     <div class="head">
       <div>
         <div class="name">${topic}</div>
-        <div class="mini">${totalQs} questions • Y2 focus</div>
+        <div class="mini">${totalQs} questions</div>
       </div>
       <div class="badges">
         <span class="pill ${accPillClass}">${st.answered ? `${st.accuracy}%` : "New"}</span>
@@ -196,22 +214,6 @@ function renderTopics(){
 
   const qs = applyFilters();
   let topics = uniqueTopics(qs);
-  const sort = $("sortSelect").value;
-
-  topics.sort((a,b)=>{
-    const sa = topicStats(a);
-    const sb = topicStats(b);
-    if(sort === "name") return a.localeCompare(b);
-    if(sort === "weakest"){
-      const wa = sa.answered ? sa.correct/sa.answered : 0;
-      const wb = sb.answered ? sb.correct/sb.answered : 0;
-      return wa - wb;
-    }
-    if(sort === "mostAnswered"){
-      return (sb.answered ?? 0) - (sa.answered ?? 0);
-    }
-    return a.localeCompare(b);
-  });
 
   topics.forEach(t => {
     const qsInTopic = qs.filter(q => q.topic === t);
@@ -230,7 +232,7 @@ let state = {
   score:0,
   answered:false,
   activeQ:null,
-  pack:"Year 2 (default)"
+  pack:"Y2: Long-term conditions"
 };
 
 function showHome(){
@@ -428,12 +430,12 @@ function buildDeckForMode(topic){
     return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
   }
 
-  // spaced
   const weights = all.map(q => {
     const wrong = (wrongMap[qId(q)] ?? 0);
     const seen = (seenMap[qId(q)] ?? 0);
     return 1 + wrong * 4 + Math.max(0, 3 - seen);
   });
+
   const picked = weightedPick(all, weights, limit >= 999 ? all.length : limit);
   return picked.length ? picked : shuffle(all).slice(0, Math.min(limit, all.length));
 }
@@ -441,7 +443,7 @@ function buildDeckForMode(topic){
 function start(topic){
   state.mode = $("modeSelect").value;
   state.topic = topic;
-  state.pack = $("packSelect").value || "Year 2 (default)";
+  state.pack = $("packSelect").value || "Y2: Long-term conditions";
   state.deck = buildDeckForMode(topic);
   state.idx = 0;
   state.score = 0;
@@ -459,17 +461,17 @@ function resetProgress(){
 
 function init(){
   renderPackSelect();
-  // Force default pack to Y2 for you
-  $("packSelect").value = "Year 2 (default)";
-
   renderSubtopicSelect();
   updateHeaderStats();
   renderTopics();
 
-  $("packSelect").addEventListener("change", ()=>{ renderSubtopicSelect(); renderTopics(); });
+  $("packSelect").addEventListener("change", ()=>{
+    renderSubtopicSelect();
+    renderTopics();
+  });
+
   $("subtopicSelect").addEventListener("change", renderTopics);
   $("searchInput").addEventListener("input", renderTopics);
-  $("sortSelect").addEventListener("change", renderTopics);
   $("modeSelect").addEventListener("change", renderTopics);
 
   $("backBtn").addEventListener("click", showHome);
@@ -477,4 +479,5 @@ function init(){
   $("revealBtn").addEventListener("click", reveal);
   $("resetProgressBtn").addEventListener("click", resetProgress);
 }
+
 init();
